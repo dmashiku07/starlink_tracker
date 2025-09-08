@@ -40,32 +40,35 @@ def haversine(lat1, lon1, lat2, lon2):
 
 
 # ----------- Routes -----------
-@app.route("/")
-def index():
-    return render_template("map.html")
+@app.route("/", methods=["GET", "POST"])
+def home():
+    if request.method == "POST":
+        # Handle tracker data
+        data = request.get_json(force=True)
+        if not data:
+            return jsonify({"status": "error", "message": "No data received"}), 400
+
+        device_id = data.get("ident")
+        lat = data.get("position.latitude")
+        lng = data.get("position.longitude")
+        altitude = data.get("position.altitude")
+        timestamp = datetime.utcnow().isoformat()
+
+        conn = sqlite3.connect(DB_NAME)
+        c = conn.cursor()
+        c.execute("INSERT INTO gps_history (device_id, lat, lng, altitude, timestamp) VALUES (?, ?, ?, ?, ?)",
+                  (device_id, lat, lng, altitude, timestamp))
+        conn.commit()
+        conn.close()
+
+        return jsonify({"status": "ok"}), 200
+
+    else:
+        # GET request → show map
+        return render_template("map.html")
 
 
-@app.route("/tracker", methods=["POST"])
-def tracker_data():
-    data = request.get_json(force=True)
-    if not data:
-        return jsonify({"status": "error", "message": "No data received"}), 400
 
-    device_id = data.get("ident")
-    lat = data.get("position.latitude")
-    lng = data.get("position.longitude")
-    altitude = data.get("position.altitude")
-    timestamp = datetime.utcnow().isoformat()
-
-    # Save into DB
-    conn = sqlite3.connect(DB_NAME)
-    c = conn.cursor()
-    c.execute("INSERT INTO gps_history (device_id, lat, lng, altitude, timestamp) VALUES (?, ?, ?, ?, ?)",
-              (device_id, lat, lng, altitude, timestamp))
-    conn.commit()
-    conn.close()
-
-    return jsonify({"status": "ok"}), 200
 
 
 @app.route("/history", methods=["GET"])
