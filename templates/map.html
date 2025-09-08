@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>GPS Tracker Map</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <style>
+    #map { height: 100vh; }
+    .info-box {
+      background: white;
+      padding: 10px;
+      border-radius: 5px;
+      font-size: 14px;
+      margin: 5px;
+    }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <script>
+    var map = L.map('map').setView([0, 0], 2);
+
+    var street = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png');
+    var satellite = L.tileLayer('https://{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', {
+      subdomains:['mt0','mt1','mt2','mt3']
+    });
+    street.addTo(map);
+
+    var baseMaps = { "Street": street, "Satellite": satellite };
+    L.control.layers(baseMaps).addTo(map);
+
+    var markers = [];
+    var polyline = null;
+    var infoControl = null;
+
+    function loadData() {
+      fetch("/history")
+        .then(res => res.json())
+        .then(data => {
+          // Clear old markers
+          markers.forEach(m => map.removeLayer(m));
+          markers = [];
+
+          if (polyline) {
+            map.removeLayer(polyline);
+          }
+          if (infoControl) {
+            map.removeControl(infoControl);
+          }
+
+          var coords = [];
+          data.points.forEach(p => {
+            var marker = L.marker([p.lat, p.lng])
+              .bindPopup(
+                `Device: ${p.device_id}<br>
+                 Lat: ${p.lat}<br>
+                 Lng: ${p.lng}<br>
+                 Time: ${p.timestamp}`
+              );
+            marker.addTo(map);
+            markers.push(marker);
+            coords.push([p.lat, p.lng]);
+          });
+
+          if (coords.length > 0) {
+            polyline = L.polyline(coords, {color: 'red'}).addTo(map);
+            map.fitBounds(polyline.getBounds());
+
+            var distanceKm = (data.distance_meters / 1000).toFixed(2);
+            infoControl = L.control({position: 'topright'});
+            infoControl.onAdd = function () {
+              var div = L.DomUtil.create('div', 'info-box');
+              div.innerHTML = `<b>Total Distance:</b> ${distanceKm} km`;
+              return div;
+            };
+            infoControl.addTo(map);
+          }
+        });
+    }
+
+    // Load first data
+    loadData();
+
+    // Auto-refresh every 10 seconds
+    setInterval(loadData, 10000);
+  </script>
+</body>
+</html>
